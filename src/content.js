@@ -4,26 +4,7 @@ const settings = {
   apiKey: ''
 };
 const styleElement = document.createElement("style");
-styleElement.textContent = `
-    .show-anyway-button {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background-color: black;
-    color: white;
-    padding: 10px 20px;
-    font-size: 16px;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    width:100%;
-    height:100%;
-    pointer-events: auto;
-  }
-
- 
-`;
+styleElement.textContent = ``;
 document.head.appendChild(styleElement);
 console.log("Content script initialized");
 
@@ -41,8 +22,8 @@ chrome.storage.onChanged.addListener((changes) => {
   if (changes.apiKey) settings.apiKey = changes.apiKey.newValue;
 });
 
-// Use a Map to track blurred videos
-const blurredVideos = new Map();
+// Use a Map to track hidden videos
+const hiddenVideos = new Map();
 
 // Batch processing variables
 const batchSize = 15; // Process 15 titles per batch
@@ -52,100 +33,16 @@ let batchProcessTimer = null;
 
 // Function to generate a consistent video ID
 function extractVideoId(element) {
- 
   return 'video-' + Math.random().toString(36).substring(2, 15);
 }
- 
-// Function to blur a specific video
-function blurVideo(element, videoId) {
-  if (!videoId || !element) return;
-  
-  console.log(`Blurring video: ${videoId}`);
-  
-  // Create a unique identifier for this element
-  const uniqueId = `blurred-${videoId}`;
-  
-  // Apply blur directly to the element using a class
-  // First, create a style for this specific blur if it doesn't exist
-  // Note instead of blur i put the showanyway button in whole thumbnail so not confuse if anyone reading ,
-  // i blur the content bfore but  show anyway button was not coming on top of the 
-  if (!document.getElementById(`style-${uniqueId}`)) {
-    const styleElement = document.createElement('style');
-    styleElement.id = `style-${uniqueId}`;
-    styleElement.textContent = `
-      .${uniqueId} {
-        position: relative;
-        pointer-events: none;
-      }
-    `;
-    document.head.appendChild(styleElement);
-  }
-  
-  // Add the blur class to the element
-  element.classList.add(uniqueId);
-  element.setAttribute('data-blur-id', videoId);
-  
-  // Add the "Show Anyway" button
-  const showButton = document.createElement('button');
-  showButton.textContent = 'Show Anyway';
-  showButton.className = 'show-anyway-button';
-  showButton.dataset.videoId = videoId;
-  showButton.addEventListener('click', (e) => {
-    e.stopPropagation();
-    unblurVideo(videoId);
-  });
-  
-  // Add button to element
-  element.style.position = 'relative';
-  element.appendChild(showButton);
-  
-  // Store reference to this blurred video
-  blurredVideos.set(videoId, {
-    uniqueId,
-    element: element,
-    styleId: `style-${uniqueId}`,
-    buttonElement: showButton
-  });
-}
 
-// Function to unblur a specific video
-function unblurVideo(videoId) {
-  if (!videoId) return;
-  
-  console.log(`Attempting to unblur video: ${videoId}`);
-  
-  const blurredInfo = blurredVideos.get(videoId);
-  if (!blurredInfo) {
-    console.log(`No blur info found for video ID: ${videoId}`);
-    return;
-  }
-  
-  // Remove the blur class from the element
-  if (blurredInfo.element && blurredInfo.uniqueId) {
-    console.log(`Removing blur class ${blurredInfo.uniqueId} from element`);
-    blurredInfo.element.classList.remove(blurredInfo.uniqueId);
-  }
-  
-  // Remove the button
-  if (blurredInfo.buttonElement) {
-    blurredInfo.buttonElement.remove();
-  }
-  
-  // Keep the style in place for any other elements using the same class
-  // Only remove it if this is the last element using this style
-  const otherElementsWithSameClass = document.querySelectorAll(`.${blurredInfo.uniqueId}`);
-  if (otherElementsWithSameClass.length === 0) {
-    // No other elements using this class, safe to remove the style
-    const styleElement = document.getElementById(blurredInfo.styleId);
-    if (styleElement) {
-      console.log(`Removing style element: ${blurredInfo.styleId}`);
-      styleElement.remove();
-    }
-  }
-  
-  // Remove from our tracked blurred videos
-  blurredVideos.delete(videoId);
-  console.log(`Removed video ID ${videoId} from blurred videos map. Current count: ${blurredVideos.size}`);
+// Function to hide a specific video
+function hideVideo(element, videoId) {
+  if (!videoId || !element) return;
+
+  console.log(`Hiding video: ${videoId}`);
+  element.style.display = 'none';
+  hiddenVideos.set(videoId, { element });
 }
 
 // Function to process a video thumbnail or player
@@ -153,36 +50,33 @@ function processVideo(element) {
   // Skip if already processed
   if (element.hasAttribute('data-processed')) return;
   element.setAttribute('data-processed', 'true');
-  
+
   console.log("Processing video element", element.tagName);
-  
+
   // Extract video ID
   const videoId = extractVideoId(element);
   if (!videoId) return;
-  
+
   // Find the title in the element
-  const titleElement = element.querySelector('#video-title') || 
-                       element.querySelector('a#video-title-link') || 
+  const titleElement = element.querySelector('#video-title') ||
+                       element.querySelector('a#video-title-link') ||
                        element.querySelector('h3 a#video-title');
-  
+
   if (!titleElement) {
     console.log("No title element found");
     return;
   }
-  
+
   const title = titleElement.innerText || titleElement.textContent;
   console.log("Found video:", title);
-  
-  // Blur initially
-  blurVideo(element, videoId);
-  
+
   // Add to batch for processing
   titleBatch.push({
     title,
     videoId,
     element
   });
-  
+
   // Start batch processing timer if not already running
   if (!processingBatch && !batchProcessTimer) {
     batchProcessTimer = setTimeout(() => {
@@ -215,19 +109,18 @@ async function processBatch() {
       
       // Process results
       currentBatch.forEach((item, index) => {
-        //doing this so we can exclude that topic videos from page instead of showing one topic video we did
-        const isRelevant = (results[index]);
+        const isRelevant = results[index];
         if (isRelevant) {
-          console.log("Video matches keywords, blurring:", item.title);
+          console.log("Video matches keywords, hiding:", item.title);
+          hideVideo(item.element, item.videoId);
         } else {
-          console.log("Video does not match keywords, unblurring :", item.title);
-          unblurVideo(item.videoId);
+          console.log("Video does not match keywords, showing:", item.title);
+          // Do nothing, the video is visible by default
         }
       });
     } catch (error) {
       console.error("Error processing batch:", error);
-      // On error, unblur all videos in the batch to avoid hiding content
-      currentBatch.forEach(item => unblurVideo(item.videoId));
+      // On error, do not hide any videos
     }
   }
   
@@ -456,17 +349,6 @@ new MutationObserver(() => {
   const url = location.href;
   if (url !== lastUrl) {
     lastUrl = url;
-    // Clear existing blurred videos when navigating
-    blurredVideos.forEach((info, videoId) => {
-      if (info.element) {
-        info.element.removeAttribute('data-processed');
-      }
-      if (info.buttonElement) {
-        info.buttonElement.remove();
-      }
-    });
-    blurredVideos.clear();
-    
     // Clear batch processing
     if (batchProcessTimer) {
       clearTimeout(batchProcessTimer);
