@@ -40,7 +40,7 @@ function extractVideoId(element) {
 function hideVideo(element, videoId) {
   if (!videoId || !element) return;
 
-  const container = element.closest('ytd-rich-item-renderer');
+  const container = element.closest('ytd-rich-item-renderer') || element.closest('ytd-video-renderer');
   if (container) {
     console.log(`Hiding video container: ${videoId}`);
     container.style.display = 'none';
