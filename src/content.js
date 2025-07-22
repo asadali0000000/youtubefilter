@@ -40,9 +40,16 @@ function extractVideoId(element) {
 function hideVideo(element, videoId) {
   if (!videoId || !element) return;
 
-  console.log(`Hiding video: ${videoId}`);
-  element.style.display = 'none';
-  hiddenVideos.set(videoId, { element });
+  const container = element.closest('ytd-rich-item-renderer');
+  if (container) {
+    console.log(`Hiding video container: ${videoId}`);
+    container.style.display = 'none';
+    hiddenVideos.set(videoId, { element: container });
+  } else {
+    console.log(`Hiding video element: ${videoId}`);
+    element.style.display = 'none';
+    hiddenVideos.set(videoId, { element });
+  }
 }
 
 // Function to process a video thumbnail or player
